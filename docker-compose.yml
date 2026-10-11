@@ -1,0 +1,8 @@
+services:
+  mongodb:
+    extends:
+      file: infra/docker-compose.yml
+      service: mongodb
+
+volumes:
+  mongodb_data:

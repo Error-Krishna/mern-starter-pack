@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+.env
+.env.*
+!.env.example
+!.env.test.example
+!.env.production.example
+!.npmrc
+.DS_Store
+*.log
+.vscode/
+.idea/
+playwright-report/
+test-results/
