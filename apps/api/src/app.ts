@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import cookieParser from "cookie-parser";
 import type { RequestHandler } from "express";
 
 import { env } from "./config/env.js";
@@ -10,6 +11,7 @@ import { requestIdMiddleware } from "./common/middleware/request-id.js";
 import { notFoundHandler } from "./common/middleware/not-found.js";
 import { errorHandler } from "./common/middleware/error-handler.js";
 import { healthRouter } from "./modules/health/health.routes.js";
+import { authRouter } from "./modules/auth/auth.routes.js";
 
 export const app = express();
 
@@ -46,6 +48,7 @@ app.use(
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+app.use(cookieParser());
 
 app.use(
   rateLimit({
@@ -65,6 +68,7 @@ app.get("/", (_req, res) => {
 
 app.use("/health", healthRouter);
 app.use("/api/v1/health", healthRouter);
+app.use("/api/v1/auth", authRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

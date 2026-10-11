@@ -519,3 +519,9 @@ Only mark an item complete after verifying it in the code and deployed environme
 ## License
 
 Add the license appropriate for your project before distributing or publishing this starter. Until a license is included, do not assume others have permission to reuse or redistribute the code.
+
+## Authentication
+
+The starter includes registration, login, access-token verification, refresh-token rotation, logout, and a basic authentication UI. See [`docs/authentication.md`](docs/authentication.md) for endpoints, cookie behavior, configuration, and remaining production work.
+
+Before deploying, configure a unique `JWT_ACCESS_SECRET`, review cookie/CSRF settings for your hosting topology, and add integration tests against an isolated database.
