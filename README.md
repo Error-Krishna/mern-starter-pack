@@ -1,8 +1,8 @@
 # MERN Starter
 
-A reusable, TypeScript-first MERN monorepo starter for building full-stack web applications. It includes a React frontend, an Express API, MongoDB integration, shared development tooling, automated tests, and Docker Compose configuration for local database development.
+A reusable, TypeScript-first MERN monorepo starter for building full-stack web applications. It includes a React frontend, an Express API, MongoDB integration, authentication and authorization foundations, shared development tooling, automated tests, and Docker Compose configuration for local database development.
 
-> **Project status:** The starter foundation has passed TypeScript checks, linting, tests, and production builds. This confirms that the current baseline compiles and its existing tests pass; it does not mean every production feature (such as complete authentication, authorization, or deployment automation) is implemented.
+> **Project status:** The starter's configured formatting, lint, TypeScript, test, and production-build checks have passed. The authentication implementation provides registration, login, JWT access tokens, refresh-token rotation, logout, authenticated-user lookup, and role-checking middleware. Passing these checks does not by itself establish production readiness; review the security notes and complete the integration testing described below before deploying.
 
 ---
 
@@ -14,14 +14,17 @@ A reusable, TypeScript-first MERN monorepo starter for building full-stack web a
 - [Quick start](#quick-start)
 - [Environment configuration](#environment-configuration)
 - [Run the application](#run-the-application)
+- [Authentication](#authentication)
 - [Commands reference](#commands-reference)
 - [Testing](#testing)
 - [Production builds](#production-builds)
 - [Project structure](#project-structure)
+- [Using this starter for new projects](#using-this-starter-for-new-projects)
 - [Development workflow](#development-workflow)
 - [MongoDB infrastructure](#mongodb-infrastructure)
 - [Troubleshooting](#troubleshooting)
 - [Before deploying](#before-deploying)
+- [License](#license)
 
 ---
 
@@ -35,23 +38,26 @@ A reusable, TypeScript-first MERN monorepo starter for building full-stack web a
 - TanStack Query for server-state management and caching
 - Axios for HTTP requests
 - React Hook Form and Zod for forms and validation
+- Authentication context, in-memory access-token storage, and a reusable protected-route component
 - Vitest, jsdom, and React Testing Library
 - ESLint and TypeScript checks
 
-The frontend includes a starter application and a component test. Extend these with your own pages, layouts, components, and user flows.
+The frontend contains a basic authentication demonstration. Extend it with your own pages, layouts, components, and product-specific user flows.
 
 ### Backend — `apps/api`
 
 - Node.js with Express 5 and TypeScript using ES modules
 - MongoDB access through Mongoose
-- Zod-based environment validation
-- CORS and Helmet middleware
-- Express rate-limiting dependency
-- Pino-based structured logging
+- Zod-based environment and request validation
+- Registration, login, refresh, logout, and current-user endpoints
+- bcrypt password hashing
+- Short-lived JWT access tokens and refresh-token rotation using an HTTP-only cookie
+- Authentication middleware and a role-checking helper
+- CORS, Helmet, rate limiting, and Pino structured logging
 - Vitest and Supertest for API tests
 - ESLint and TypeScript checks
 
-The API is where routes, business logic, validation, database operations, and server-side integrations belong. Check the source code to confirm which routes and protections are currently implemented before relying on them.
+Review [`docs/authentication.md`](docs/authentication.md) for endpoint behavior and security considerations. The authentication tests currently include schema and UI coverage; add database-backed integration tests for the complete lifecycle before relying on it in production.
 
 ### Shared tooling
 
@@ -66,26 +72,27 @@ The API is where routes, business logic, validation, database operations, and se
 - Docker Compose configuration at the repository root and in `infra/`
 - MongoDB 8 for local development, with a persistent named volume and health check
 
-**Redis is not defined in the current Compose configuration.** Add it explicitly if your application later requires Redis-backed queues, caching, or other functionality.
+**Redis is not defined in the current Compose configuration.** Add it explicitly if an application later requires Redis-backed queues, caching, or other functionality.
 
 ---
 
 ## Technology stack
 
-| Area                     | Technologies                             |
-| ------------------------ | ---------------------------------------- |
-| Monorepo                 | pnpm workspaces                          |
-| Frontend                 | React 19, TypeScript, Vite 7             |
-| Routing and server state | React Router, TanStack Query             |
-| HTTP client              | Axios                                    |
-| Forms and validation     | React Hook Form, Zod                     |
-| Backend                  | Node.js, Express 5, TypeScript           |
-| Database                 | MongoDB 8, Mongoose                      |
-| Middleware and logging   | CORS, Helmet, express-rate-limit, Pino   |
-| Testing                  | Vitest, Supertest, React Testing Library |
-| Code quality             | ESLint, Prettier                         |
-| Git hooks                | Husky, lint-staged                       |
-| Local infrastructure     | Docker Compose                           |
+| Area                     | Technologies                                     |
+| ------------------------ | ------------------------------------------------ |
+| Monorepo                 | pnpm workspaces                                  |
+| Frontend                 | React 19, TypeScript, Vite 7                     |
+| Routing and server state | React Router, TanStack Query                     |
+| HTTP client              | Axios                                            |
+| Forms and validation     | React Hook Form, Zod                             |
+| Backend                  | Node.js, Express 5, TypeScript                   |
+| Database                 | MongoDB 8, Mongoose                              |
+| Authentication           | bcrypt, JWT access tokens, refresh-token cookies |
+| Middleware and logging   | CORS, Helmet, express-rate-limit, Pino           |
+| Testing                  | Vitest, Supertest, React Testing Library         |
+| Code quality             | ESLint, Prettier                                 |
+| Git hooks                | Husky, lint-staged                               |
+| Local infrastructure     | Docker Compose                                   |
 
 ---
 
@@ -129,16 +136,26 @@ pnpm install
 
 ### 2. Create local environment files
 
-The API loads environment variables through `dotenv/config`, and the frontend uses Vite's environment-file conventions. When running package scripts, each app runs with its own package directory as the working directory. Create the local files in those app directories:
+The API loads environment variables through `dotenv/config`, and the frontend uses Vite's environment-file conventions. Each app's scripts run from its own package directory. Create local files in those app directories:
 
 ```bash
 cp .env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env
 ```
 
-If either destination file already exists, do not overwrite it blindly. Review and update it manually instead.
+If either destination already exists, do not overwrite it blindly; review and update it manually.
 
-The example files contain local development values. Adjust them for your machine as needed, and never commit real secrets.
+Generate a unique local JWT secret:
+
+```bash
+JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')
+sed -i '' "s|^JWT_ACCESS_SECRET=.*|JWT_ACCESS_SECRET=${JWT_SECRET}|" apps/api/.env
+unset JWT_SECRET
+```
+
+The `sed -i ''` syntax above is for macOS. On Linux, use an appropriate Linux `sed` command or edit the file directly. Keep the generated secret private.
+
+The frontend example URL defaults to `http://localhost:5000/api/v1`. If you change the API port, update `VITE_API_URL` in `apps/web/.env` and keep the API's `CORS_ORIGIN` consistent with the frontend origin.
 
 ### 3. Start MongoDB
 
@@ -148,7 +165,7 @@ From the repository root:
 docker compose up -d
 ```
 
-The root `docker-compose.yml` extends the MongoDB service defined in `infra/docker-compose.yml`. You can inspect its status with:
+Check status and logs:
 
 ```bash
 docker compose ps
@@ -161,18 +178,25 @@ docker compose logs -f mongodb
 pnpm dev
 ```
 
-This starts `@mern/api` and `@mern/web` in parallel. With the example settings, the API listens on port `5000` and the Vite frontend normally uses port `5173`. Check the terminal output if a port is already occupied or Vite selects another port.
+This starts `@mern/api` and `@mern/web` in parallel. With the example settings, the API listens on port `5000` and Vite normally uses port `5173`. Check terminal output if a port is already occupied or Vite chooses another port.
 
-### 5. Verify the baseline
-
-In a separate terminal, from the repository root:
+### 5. Verify the setup
 
 ```bash
+pnpm format:check
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
 ```
+
+Check that the API responds:
+
+```bash
+curl -i http://localhost:5000/
+```
+
+The API requires a reachable MongoDB instance. If you changed the API port, use that port in the request.
 
 ---
 
@@ -182,35 +206,32 @@ pnpm build
 
 The root `.env.example` is the template for `apps/api/.env`.
 
-| Variable      | Example                                  | Purpose                                                                         |
-| ------------- | ---------------------------------------- | ------------------------------------------------------------------------------- |
-| `NODE_ENV`    | `development`                            | Runtime mode: `development`, `test`, or `production`                            |
-| `API_HOST`    | `0.0.0.0`                                | Host/interface the API binds to                                                 |
-| `API_PORT`    | `5000`                                   | API listening port                                                              |
-| `MONGODB_URI` | `mongodb://127.0.0.1:27017/mern_starter` | MongoDB connection string                                                       |
-| `CORS_ORIGIN` | `http://localhost:5173`                  | Allowed frontend origin                                                         |
-| `LOG_LEVEL`   | `debug`                                  | Pino log level: `fatal`, `error`, `warn`, `info`, `debug`, `trace`, or `silent` |
+| Variable            | Example                                  | Purpose                                                                            |
+| ------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------- |
+| `NODE_ENV`          | `development`                            | Runtime mode: `development`, `test`, or `production`                               |
+| `API_HOST`          | `0.0.0.0`                                | Host/interface the API binds to                                                    |
+| `API_PORT`          | `5000`                                   | API listening port                                                                 |
+| `MONGODB_URI`       | `mongodb://127.0.0.1:27017/mern_starter` | MongoDB connection string                                                          |
+| `CORS_ORIGIN`       | `http://localhost:5173`                  | Allowed frontend origin                                                            |
+| `LOG_LEVEL`         | `debug`                                  | Pino log level: `fatal`, `error`, `warn`, `info`, `debug`, `trace`, or `silent`    |
+| `JWT_ACCESS_SECRET` | Generate a unique secret                 | Secret used to sign access tokens; never use the example placeholder in production |
 
-The API validates these values with Zod during configuration loading. `MONGODB_URI` must be non-empty, `CORS_ORIGIN` must be a valid URL, and the port must be between `1` and `65535`. Invalid values can prevent the API from starting.
-
-For a local MongoDB instance using the supplied Compose configuration, the example URI should work as long as port `27017` is available.
+The API validates configuration with Zod. Invalid values can prevent the API from starting. For local MongoDB using the supplied Compose configuration, the example URI should work if port `27017` is available.
 
 ### Frontend — `apps/web/.env`
-
-The frontend example file defines:
 
 ```dotenv
 VITE_API_URL=http://localhost:5000/api/v1
 ```
 
-`VITE_API_URL` is the base URL used by the frontend API client. Change it to match your API address in each environment.
+`VITE_API_URL` is the base URL used by the frontend API client. Change it to match the API address in each environment.
 
 **Important:** Variables prefixed with `VITE_` are exposed to browser-side code. Never put database credentials, private API keys, or other secrets in them.
 
 ### Environment-file rules
 
 - Keep local `.env` files untracked.
-- Commit example files with placeholder/local development values only.
+- Commit example files with placeholders or local development values only.
 - Use your hosting provider's secret manager for production credentials.
 - Use separate database names and credentials for development, testing, and production.
 - Review `.gitignore` before adding any new secret-bearing file.
@@ -237,23 +258,42 @@ pnpm --filter @mern/web dev
 pnpm --filter @mern/api dev
 ```
 
-The API requires valid environment configuration and a reachable MongoDB instance. The frontend can start without the API, but requests to API-dependent features will fail until the API is available.
-
 ### Run the compiled API
-
-First build the project:
 
 ```bash
 pnpm --filter @mern/api build
-```
-
-Then start the compiled API:
-
-```bash
 pnpm --filter @mern/api start
 ```
 
-Ensure `apps/api/.env` exists and the database is reachable before starting it.
+Ensure `apps/api/.env` exists and MongoDB is reachable before starting the API.
+
+---
+
+## Authentication
+
+The starter includes these API endpoints:
+
+| Method | Endpoint                | Purpose                                             |
+| ------ | ----------------------- | --------------------------------------------------- |
+| `POST` | `/api/v1/auth/register` | Register an account                                 |
+| `POST` | `/api/v1/auth/login`    | Authenticate with credentials                       |
+| `POST` | `/api/v1/auth/refresh`  | Rotate a refresh token and issue a new access token |
+| `POST` | `/api/v1/auth/logout`   | Revoke the refresh session                          |
+| `GET`  | `/api/v1/auth/me`       | Return the authenticated user's profile             |
+
+The frontend includes a simple sign-in/register UI, session restoration, logout, an in-memory access-token store, and a reusable `ProtectedRoute` component.
+
+Security and integration notes:
+
+- Passwords are hashed; they should never be stored in plaintext.
+- Access tokens are short-lived and kept in frontend memory, not local storage.
+- Refresh tokens are delivered in an HTTP-only cookie and stored server-side as hashes.
+- Configure a strong, unique `JWT_ACCESS_SECRET` for each environment.
+- Verify cookie settings, HTTPS, cross-origin behavior, and CSRF protections against your actual deployment topology.
+- Test duplicate registration, invalid credentials, token expiry, refresh-token reuse, logout revocation, and concurrent refresh requests.
+- Add database-backed integration tests using an isolated test database before production deployment.
+
+See [`docs/authentication.md`](docs/authentication.md) for additional implementation details and limitations.
 
 ---
 
@@ -277,7 +317,7 @@ Run root commands from the repository root.
 | `pnpm format:check`           | Check formatting without rewriting files                     |
 | `pnpm clean`                  | Remove generated output where package scripts define cleanup |
 
-### Package-specific test commands
+Package-specific tests:
 
 ```bash
 pnpm --filter @mern/api test
@@ -289,7 +329,7 @@ pnpm --filter @mern/web test:watch
 pnpm --filter @mern/web test:coverage
 ```
 
-To inspect the current scripts and dependencies:
+Inspect current scripts and dependencies:
 
 ```bash
 cat package.json
@@ -301,15 +341,13 @@ cat apps/web/package.json
 
 ## Testing
 
-The API and frontend each have their own Vitest configuration and test scripts.
-
 ### API tests
 
 ```bash
 pnpm --filter @mern/api test
 ```
 
-The API uses Vitest and Supertest. Tests can exercise application routes and middleware without requiring a manually started HTTP server, depending on how each test is written.
+The API uses Vitest and Supertest. Tests can exercise routes and middleware without a manually started HTTP server, depending on how each test is written.
 
 ### Frontend tests
 
@@ -317,9 +355,9 @@ The API uses Vitest and Supertest. Tests can exercise application routes and mid
 pnpm --filter @mern/web test
 ```
 
-The frontend uses Vitest, jsdom, and React Testing Library to test UI behavior.
+The frontend uses Vitest, jsdom, and React Testing Library.
 
-### Run all tests
+### All tests
 
 ```bash
 pnpm test
@@ -345,9 +383,9 @@ Preview the built frontend locally:
 pnpm --filter @mern/web preview
 ```
 
-A successful build confirms that the code compiles and the frontend assets can be bundled. It does not replace integration testing, a security review, environment configuration, or deployment smoke tests.
+A successful build confirms that the code compiles and frontend assets can be bundled. It does not replace integration testing, a security review, environment configuration, or deployment smoke tests. Vite's preview server is not a production hosting solution.
 
-Deploy the API and frontend according to your chosen hosting platform's requirements. Do not treat Vite's preview server as a production hosting solution.
+Deploy the API and frontend according to your chosen hosting platform's requirements.
 
 ---
 
@@ -357,26 +395,33 @@ Deploy the API and frontend according to your chosen hosting platform's requirem
 mern-starter/
 ├── apps/
 │   ├── api/
-│   │   ├── src/                  # Express API source and tests
-│   │   ├── .env.example          # May be added if app-specific example is desired
-│   │   └── package.json          # API scripts and dependencies
+│   │   ├── src/
+│   │   │   ├── common/middleware/ # Authentication/authorization middleware
+│   │   │   ├── config/            # Validated environment configuration
+│   │   │   └── modules/
+│   │   │       ├── auth/          # Auth routes, schemas, refresh sessions
+│   │   │       └── users/         # User model
+│   │   ├── package.json
+│   │   └── .env                  # Local only; do not commit
 │   └── web/
-│       ├── src/                  # React UI, tests, and test setup
-│       ├── public/               # Static public assets, if present
-│       ├── .env.example          # Frontend environment template
-│       ├── index.html            # Vite HTML entry point
-│       └── package.json          # Frontend scripts and dependencies
+│       ├── src/
+│       │   ├── auth/              # Auth context, protected route, token memory
+│       │   ├── lib/api/           # Axios API client
+│       │   └── App.tsx
+│       ├── package.json
+│       └── .env                  # Local only; do not commit
+├── docs/
+│   └── authentication.md
 ├── infra/
-│   └── docker-compose.yml        # MongoDB service definition
+│   └── docker-compose.yml
 ├── .github/                      # GitHub Actions workflows
 ├── .husky/                       # Git hooks
-├── docs/                          # Project documentation
 ├── .env.example                  # API environment template
-├── docker-compose.yml            # Root Compose entry point
-├── package.json                  # Root scripts and shared tooling
-├── pnpm-workspace.yaml           # Workspace package definitions
-├── pnpm-lock.yaml                # Locked dependency resolution
-├── .nvmrc                        # Preferred Node.js version
+├── docker-compose.yml
+├── package.json
+├── pnpm-workspace.yaml
+├── pnpm-lock.yaml
+├── .nvmrc
 ├── .gitignore
 └── README.md
 ```
@@ -385,12 +430,161 @@ This is a guide to the main project areas; the actual checked-out file tree is a
 
 ---
 
+## Using this starter for new projects
+
+The recommended long-term approach is to keep one canonical `mern-starter` repository and create a separate repository for every application. That keeps authentication, tooling, and infrastructure reusable without coupling individual products together.
+
+### Option A — Recommended: GitHub template repository
+
+#### 1. Push the starter to GitHub
+
+Create an empty GitHub repository named `mern-starter`. If your local repository already has a README, `.gitignore`, and commits, do not initialize the remote with duplicate files.
+
+From your existing starter directory:
+
+```bash
+git remote -v
+```
+
+If no `origin` remote exists, add yours and push:
+
+```bash
+git remote add origin YOUR_GITHUB_REPOSITORY_URL
+git push -u origin main
+```
+
+Replace the placeholder with your actual repository URL. If `origin` already exists, verify it before pushing.
+
+#### 2. Enable template mode
+
+On GitHub, open the repository and go to **Settings → General → Template repository**, then enable the template repository option.
+
+GitHub guide: [Creating a template repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository).
+
+#### 3. Create a project from the template
+
+For each new project:
+
+1. Open the `mern-starter` repository on GitHub.
+2. Select **Use this template → Create a new repository**.
+3. Enter a new repository name, such as `finance-tracker`.
+4. Choose the desired visibility and create the repository.
+5. Clone the newly created repository:
+
+```bash
+git clone YOUR_NEW_REPOSITORY_URL finance-tracker
+cd finance-tracker
+pnpm install
+```
+
+A GitHub-generated repository has its own Git history, separate from the template repository.
+
+#### 4. Configure the new project
+
+Create local environment files:
+
+```bash
+cp .env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+```
+
+Generate a unique JWT secret using the macOS command in [Quick start](#quick-start), then configure the database name, API port, frontend API URL, and CORS origin for the new project.
+
+Start MongoDB and the app:
+
+```bash
+docker compose up -d
+pnpm dev
+```
+
+Run the validation checks before starting product development:
+
+```bash
+pnpm format:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+### Option B — Make a local copy
+
+Use this when you want to create a project without GitHub. Run the commands from a terminal on your development machine.
+
+Replace `finance-tracker` with your desired project name:
+
+```bash
+STARTER="$HOME/Development/Personal Projects/mern-starter"
+DEST="$HOME/Development/Personal Projects/finance-tracker"
+
+mkdir -p "$DEST"
+
+rsync -a \
+  --exclude='.git' \
+  --exclude='node_modules' \
+  --exclude='**/node_modules' \
+  --exclude='dist' \
+  --exclude='**/dist' \
+  --exclude='.next' \
+  --exclude='**/.next' \
+  --exclude='apps/api/.env' \
+  --exclude='apps/web/.env' \
+  "$STARTER/" "$DEST/"
+
+cd "$DEST"
+git init
+git branch -M main
+pnpm install
+```
+
+This copies the tracked project content while excluding Git history, installed dependencies, build output, and local app environment files. Review the copied files before committing.
+
+Then create fresh environment files and a unique JWT secret as described in [Quick start](#quick-start). Make the first commit only after checking the new project's configuration and tests.
+
+### Customize each project
+
+**Keep the starter generic; put product-specific business logic in the new project.**
+
+Usually reuse:
+
+- Authentication, authorization, and session infrastructure
+- Environment validation and database connection setup
+- API conventions, error handling, request IDs, and logging
+- Frontend API client and authentication context
+- Testing, linting, formatting, and build configuration
+- Docker-based local database setup
+
+Usually customize:
+
+- Project name, branding, and README
+- Database name and environment variables
+- Frontend pages, layouts, navigation, and UX
+- Domain-specific models, routes, validation, and business logic
+- Integrations, background jobs, and deployment configuration
+
+For example, a finance application might add `transactions`, `budgets`, and `reports` modules. An analytics application might add `datasets`, `dashboards`, and `exports`. These are examples of future project-specific modules, not existing starter modules.
+
+### Keep the starter maintained
+
+When you improve reusable infrastructure:
+
+1. Make the change in the canonical starter repository.
+2. Add or update tests.
+3. Run formatting, lint, type, test, and build checks.
+4. Review the diff for secrets and unrelated changes.
+5. Commit and push the verified change.
+6. Use the updated template for future projects.
+
+Existing projects created from a template do **not** automatically receive future updates. Port improvements into existing projects deliberately and review conflicts rather than overwriting an application with a fresh starter copy.
+
+---
+
 ## Development workflow
 
 A recommended workflow for each change:
 
 1. Create a focused branch.
-2. Implement the feature in the appropriate application.
+2. Implement the feature in the appropriate app or module.
 3. Add or update tests.
 4. Run the relevant checks.
 5. Review the diff for unintended changes, generated files, and secrets.
@@ -438,9 +632,7 @@ docker compose down
 
 MongoDB is exposed on port `27017` for local development and stores data in the named `mongodb_data` volume. **Do not run `docker compose down -v` unless you intend to delete the persistent local database volume.**
 
-If port `27017` is already in use, stop the conflicting service or update the Compose port mapping and MongoDB URI consistently.
-
-The supplied Compose configuration is for local development, not an internet-facing production database.
+If port `27017` is already in use, stop the conflicting service or update the Compose port mapping and MongoDB URI consistently. The supplied Compose configuration is for local development, not an internet-facing production database.
 
 ---
 
@@ -452,13 +644,14 @@ The supplied Compose configuration is for local development, not an internet-fac
 - Check that `MONGODB_URI` is non-empty.
 - Ensure `CORS_ORIGIN` is a valid URL.
 - Ensure `API_PORT` is between `1` and `65535`.
+- Ensure `JWT_ACCESS_SECRET` is set to a unique, non-placeholder value.
 - Use an allowed `NODE_ENV` and `LOG_LEVEL` value.
 
 ### API cannot connect to MongoDB
 
 - Run `docker compose ps`.
 - Inspect logs with `docker compose logs -f mongodb`.
-- Check the `MONGODB_URI` in `apps/api/.env`.
+- Check `MONGODB_URI` in `apps/api/.env`.
 - Verify port `27017` is available.
 - If the API runs inside a container, `127.0.0.1` refers to that container, not the MongoDB container. Use the appropriate Compose service hostname in the container environment.
 
@@ -466,7 +659,7 @@ The supplied Compose configuration is for local development, not an internet-fac
 
 - Confirm the API is running on the expected port.
 - Check `VITE_API_URL` in `apps/web/.env`.
-- Confirm the API route and URL prefix match the implemented routes.
+- Confirm API route prefixes match the implemented routes.
 - Check CORS settings and browser developer tools.
 - Restart Vite after changing environment variables.
 
@@ -499,29 +692,24 @@ pnpm --filter @mern/web build
 
 This repository is a starter foundation, not a guarantee that every production requirement is complete. Verify and implement the requirements relevant to your application:
 
-- [ ] Authentication, session/token lifecycle, and authorization
-- [ ] Password hashing and account recovery, if using passwords
+- [ ] Authentication, token/session lifecycle, and authorization
+- [ ] Database-backed integration tests for registration, login, refresh, logout, and token reuse
+- [ ] Password reset and account recovery, if required
 - [ ] Rate limiting and abuse prevention on relevant endpoints
 - [ ] Strict input validation and safe error responses
-- [ ] CORS and security headers configured for the deployed environment
+- [ ] CORS, HTTPS, cookie settings, and CSRF protections appropriate for the deployed topology
 - [ ] Production secrets and environment validation
 - [ ] Database indexes, backups, and data-change strategy
 - [ ] Logging, monitoring, and alerting without exposing sensitive data
 - [ ] Health/readiness checks and graceful shutdown
-- [ ] Automated integration tests for critical workflows
 - [ ] CI checks and a repeatable deployment process
 - [ ] Dependency and container security review
+- [ ] Deployment smoke tests for critical user flows
 
-Only mark an item complete after verifying it in the code and deployed environment.
+Only mark an item complete after verifying it in code and in the deployed environment.
 
 ---
 
 ## License
 
 Add the license appropriate for your project before distributing or publishing this starter. Until a license is included, do not assume others have permission to reuse or redistribute the code.
-
-## Authentication
-
-The starter includes registration, login, access-token verification, refresh-token rotation, logout, and a basic authentication UI. See [`docs/authentication.md`](docs/authentication.md) for endpoints, cookie behavior, configuration, and remaining production work.
-
-Before deploying, configure a unique `JWT_ACCESS_SECRET`, review cookie/CSRF settings for your hosting topology, and add integration tests against an isolated database.
